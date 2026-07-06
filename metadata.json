@@ -1,0 +1,6 @@
+{
+  "name": "Espace Partenaire OdiCEE",
+  "description": "Refonte moderne, fluide et intuitive de l'espace partenaire OdiCEE pour la gestion et la simulation de dossiers de Certificats d'Économies d'Énergie (CEE).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
