@@ -658,14 +658,33 @@ export default function Documentation() {
     }
   ];
 
+  // Full content dictionary for search queries on document body/content
+  const DOCUMENT_SEARCH_CONTENTS: Record<string, string> = {
+    'plafonds-revenus': "Barème Réglementaire National CEE 2026. Les plafonds de ressources déterminent les bonus d'aides Coup de Pouce ainsi que l'éligibilité aux différents échelons. Le revenu pris en compte est le Revenu Fiscal de Référence (RFR) de l'avis d'imposition N-1 (sur les revenus de l'année précédente). Grille des plafonds de ressources : Nombre de personnes, Ménages Très Modestes (Bleu), Ménages Modestes (Jaune), Ménages Intermédiaires (Violet). Île-de-France et autres régions.",
+    'guide-copropriete': "La déclaration d'un chantier d'efficacité énergétique (CEE) en copropriété est assujettie à des règles strictes en raison du caractère collectif de la décision et de la ventilation des tantièmes de chauffage ou d'isolation. Pièces obligatoires au dossier Copropriété : PV d'Assemblée Générale, Fiche Synthèse Copropriété, Tableau des Tantièmes, Attestation sur l'Honneur. Point de vigilance réglementaire : Syndicat des Copropriétaires représenté par son Syndic en exercice.",
+    'controle-sur-site': "Les contrôles sur site COFRAC sont réalisés de façon aléatoire ou ciblée. Ils valident la réalité des travaux et le respect des critères de performances techniques exigés par les fiches d'opérations standardisées. Les 4 règles d'or pour réussir l'audit : Accessibilité totale des équipements (combles, sous-sols, chaufferie), Plaque signalétique visible et lisible (pompe à chaleur, chaudière), Cohérence absolue des dimensions (métrés réels d'isolation), Information préalable du bénéficiaire.",
+    'delais-depot': "Le non-respect des échéances réglementaires de dépôt constitue le premier motif de rejet définitif des primes CEE par le Ministère. Suivez ce guide pour sécuriser votre calendrier. Calculateur d'Échéance Légale (devis, travaux, achèvement, facture). Chronologie standard Abokine : Étape 1 : Cadre de contribution (AVANT signature), Étape 2 : Réalisation des travaux (professionnel certifié RGE), Étape 3 : Signature de l'Attestation sur l'Honneur, Étape 4 : Dépôt du dossier complet.",
+    'justificatif-domicile': "La pièce de justificatif de domicile est le document le plus souvent rejeté pour cause de non-conformité administrative. Elle atteste du lien entre le bénéficiaire et l'adresse physique du chantier. Documents autorisés : Dernier avis d'imposition, Facture d'électricité ou gaz, Facture de téléphone fixe ou internet, Quittance de loyer par organisme, Attestation d'assurance habitation. Documents interdits : Facture de téléphone mobile, eau non nominative, Quittance manuscrite par un particulier, relevés de compte, Déclaration de travaux. Outil d'Audit Express du Justificatif.",
+    'multi-chantiers': "La gestion de chantiers multiples pour un même bénéficiaire (ou sur des adresses différentes) requiert de regrouper rigoureusement les pièces pour éviter les doublons ou rejets. Principes clés : Une opération par fiche standardisée, isolation et chaudière sont deux dossiers distincts avec leurs propres attestations sur l'honneur, Numérotation distincte, Facturation détaillée avec ventilation des coûts, surfaces et puissances.",
+    'sous-traitance': "La sous-traitance de la pose des travaux d'efficacité énergétique est encadrée par la loi du 31 décembre 1975 et fait l'objet de contrôles renforcés de l'administration. Interdiction de sous-traitance en cascade : Le sous-traitant de premier rang ne peut confier la pose à un sous-traitant de second rang (artisan). Cela entraîne la nullité immédiate de la prime CEE et un signalement RGE. Pièces requises : contrat de sous-traitance, certificat RGE du sous-traitant, mention sur l'attestation sur l'honneur.",
+    'gestion-sav': "La conformité post-travaux intègre la gestion des SAV (Services Après-Vente). Un suivi rigoureux permet de maintenir l'éligibilité aux aides dans le cadre du contrôle de la performance réelle des chantiers. Garantie Biennale (2 ans) bon fonctionnement des équipements mobiles (pompes, thermostats), Garantie Décennale (10 ans) solidité de l'ouvrage, SLA d'Intervention (48h max) panne critique de chauffage.",
+    'note-mai-2024': "Mise en application du décret de simplification. Cette note précise les modalités d'application du décret n°2024-XXXX portant sur la simplification de l'accès à MaPrimeRénov' et aux aides de certificats d'économies d'énergie (CEE) pour le secteur résidentiel individuel. Modifications substantielles : Assouplissement des critères d'éligibilité pour les monogestes d'isolation, Prolongation des barèmes Coup de Pouce Chauffage, Simplification des formulaires d'Attestation sur l'Honneur.",
+    'note-janvier-2024': "Réforme globale MaPrimeRénov et CEE 2024. Instructions cadres relatives à la mise en œuvre des règles de cumul entre le dispositif d'État MaPrimeRénov' et les Certificats d'Économies d'Énergie. Cette note définit le parcours d'accompagnement obligatoire (Mon Accompagnateur Rénov') pour les rénovations globales d'ampleur.",
+    'note-septembre-2023': "Évolution de la fiche d'isolation de combles (BAR-EN-101). Note relative aux nouvelles exigences de résistance thermique minimale R >= 7 m².K/W pour l'isolation de combles perdus, et aux obligations de report photographique géolocalisé pour les chantiers d'isolation thermique par l'extérieur."
+  };
+
   // Search filter logic
   const filteredDocuments = useMemo(() => {
     if (!searchQuery.trim()) return documents;
     const query = searchQuery.toLowerCase().trim();
-    return documents.filter(doc => 
-      doc.title.toLowerCase().includes(query) ||
-      doc.keywords.some(kw => kw.includes(query))
-    );
+    return documents.filter(doc => {
+      const content = DOCUMENT_SEARCH_CONTENTS[doc.id] || '';
+      return (
+        doc.title.toLowerCase().includes(query) ||
+        content.toLowerCase().includes(query) ||
+        doc.keywords.some(kw => kw.includes(query))
+      );
+    });
   }, [searchQuery]);
 
   // Expand categories that contain matching search results

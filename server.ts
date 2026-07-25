@@ -77,6 +77,7 @@ app.post('/api/analyse-devis', async (req, res) => {
       data: {
         beneficiaireNom: 'Martin',
         beneficiairePrenom: 'Jean-Pierre',
+        beneficiaireCivilite: 'M.',
         beneficiaireRaisonSociale: '',
         beneficiaireSiret: '',
         beneficiaireAdresse: '14 Rue de la République',
@@ -121,6 +122,7 @@ app.post('/api/analyse-devis', async (req, res) => {
           properties: {
             beneficiaireNom: { type: Type.STRING, description: 'Nom de famille du bénéficiaire' },
             beneficiairePrenom: { type: Type.STRING, description: 'Prénom du bénéficiaire' },
+            beneficiaireCivilite: { type: Type.STRING, description: 'Civilité du bénéficiaire (M., Mme, ou Autre)' },
             beneficiaireRaisonSociale: { type: Type.STRING, description: 'Raison sociale si c\'est une entreprise' },
             beneficiaireSiret: { type: Type.STRING, description: 'SIRET si c\'est une entreprise' },
             beneficiaireAdresse: { type: Type.STRING, description: 'Adresse postale complète de facturation/travaux' },
@@ -157,6 +159,7 @@ app.post('/api/analyse-devis', async (req, res) => {
       fallbackData: {
         beneficiaireNom: 'Martin',
         beneficiairePrenom: 'Jean-Pierre',
+        beneficiaireCivilite: 'M.',
         beneficiaireAdresse: '14 Rue de la République',
         beneficiaireCodePostal: '69002',
         beneficiaireVille: 'Lyon',

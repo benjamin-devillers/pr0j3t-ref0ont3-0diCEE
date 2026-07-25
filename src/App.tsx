@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import html2canvas from 'html2canvas';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import Simulator from './components/Simulator';
@@ -271,427 +272,303 @@ export default function App() {
     }, 3000);
   };
 
-  const handleGenerateReport = () => {
-    // 1. Gather Telemetry
-    const reportUrl = window.location.href;
-    const reportUA = navigator.userAgent;
-    const reportPlatform = (navigator as any).userAgentData?.platform || navigator.platform || "Inconnu";
-    const reportScreenSize = `${window.screen.width}x${window.screen.height} (DPR: ${window.devicePixelRatio || 1})`;
-    const reportViewport = `${window.innerWidth}x${window.innerHeight}`;
-    const reportDate = new Date().toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'medium' });
-    const activeViewLabel = 
-      currentView === 'dashboard' ? 'Tableau de bord' :
-      currentView === 'wizard' ? 'Nouveau dossier CEE (Wizard)' :
-      currentView === 'simulator' ? 'Simulateur de primes' :
-      currentView === 'company' ? 'Ma société' :
-      currentView === 'documentation' ? 'Boîtes à outils' :
-      currentView === 'detail' ? 'Détail de dossier' : 'Accueil';
-    const companyName = userCompany?.raisonSociale || 'Ouate Else';
+  const handleGenerateReport = async () => {
+    // Mathematical color converters
+    const oklabToRgb = (L: number, a: number, b: number): [number, number, number] => {
+      const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
+      const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
+      const s_ = L - 0.0894841775 * a - 1.2914855480 * b;
 
-    // 2. Draw Schematic Screenshot representing high-fidelity layout on a taller canvas to hold diagnostics
-    const canvas = document.createElement('canvas');
-    canvas.width = 1200;
-    canvas.height = 1100; // Extra height for the integrated report parameters
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      // Background
-      ctx.fillStyle = '#F8FAFC';
-      ctx.fillRect(0, 0, 1200, 1100);
+      const l = l_ * l_ * l_;
+      const m = m_ * m_ * m_;
+      const s = s_ * s_ * s_;
 
-      // Sidebar background
-      const grad = ctx.createLinearGradient(0, 0, 0, 750);
-      grad.addColorStop(0, '#0F172A'); // Slate 900
-      grad.addColorStop(1, '#1E293B'); // Slate 800
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, 260, 750);
+      const r = +4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s;
+      const g = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s;
+      const blue = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s;
 
-      // Logo house structure in sidebar
-      ctx.fillStyle = '#328CC1'; // Secondary logo color
-      ctx.beginPath();
-      ctx.moveTo(40, 65);
-      ctx.lineTo(40, 45);
-      ctx.lineTo(60, 30);
-      ctx.lineTo(80, 45);
-      ctx.lineTo(80, 65);
-      ctx.closePath();
-      ctx.fill();
+      const gamma = (c: number) => {
+        const abs = Math.abs(c);
+        const res = abs <= 0.0031308 ? 12.92 * abs : 1.055 * Math.pow(abs, 1 / 2.4) - 0.055;
+        return c < 0 ? -res : res;
+      };
+
+      const R = Math.min(255, Math.max(0, Math.round(gamma(r) * 255)));
+      const G = Math.min(255, Math.max(0, Math.round(gamma(g) * 255)));
+      const B = Math.min(255, Math.max(0, Math.round(gamma(blue) * 255)));
+
+      return [R, G, B];
+    };
+
+    const oklchToRgb = (L: number, C: number, H: number): [number, number, number] => {
+      const hueRad = (H * Math.PI) / 180;
+      const a = C * Math.cos(hueRad);
+      const b = C * Math.sin(hueRad);
+      return oklabToRgb(L, a, b);
+    };
+
+    const parsePart = (val: string, maxVal = 1): number => {
+      if (!val) return 0;
+      let parsed = parseFloat(val);
+      if (val.endsWith('%')) {
+        parsed = (parseFloat(val) / 100) * maxVal;
+      } else if (val.endsWith('deg')) {
+        parsed = parseFloat(val);
+      } else if (val.endsWith('rad')) {
+        parsed = parseFloat(val) * (180 / Math.PI);
+      } else if (val.endsWith('turn')) {
+        parsed = parseFloat(val) * 360;
+      }
+      return isNaN(parsed) ? 0 : parsed;
+    };
+
+    const parseAndReplaceColors = (text: string): string => {
+      if (!text) return '';
       
-      // Draw cloud inside house
-      ctx.fillStyle = '#FFFFFF';
-      ctx.beginPath();
-      ctx.arc(55, 52, 6, 0, Math.PI * 2);
-      ctx.arc(65, 52, 6, 0, Math.PI * 2);
-      ctx.arc(60, 47, 6, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Company text in sidebar
-      ctx.fillStyle = '#FFFFFF';
-      ctx.font = 'bold 15px sans-serif';
-      ctx.fillText(companyName, 95, 48);
-      ctx.fillStyle = '#94A3B8';
-      ctx.font = 'bold 9px sans-serif';
-      ctx.fillText('ADMINISTRATEUR', 95, 61);
-
-      // Sidebar separator line
-      ctx.strokeStyle = '#334155';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(20, 85);
-      ctx.lineTo(240, 85);
-      ctx.stroke();
-
-      // Sidebar items navigation simulation
-      const navItems = ['Accueil', 'Déclarer', 'Simuler une prime', 'Ma société'];
-      navItems.forEach((item, index) => {
-        const itemY = 135 + index * 52;
-        const isActive = item === activeItem;
-
-        if (isActive) {
-          ctx.fillStyle = '#1E293B';
-          ctx.beginPath();
-          if (ctx.roundRect) {
-            ctx.roundRect(15, itemY - 20, 230, 36, 8);
-          } else {
-            ctx.rect(15, itemY - 20, 230, 36);
-          }
-          ctx.fill();
-          ctx.fillStyle = '#328CC1'; // active item coloring
-        } else {
-          ctx.fillStyle = '#94A3B8';
+      // Replace oklch
+      let result = text.replace(/oklch\(([^)]+)\)/gi, (match, content) => {
+        try {
+          const parts = content.trim().split(/[\s,/]+/).filter(Boolean);
+          if (parts.length < 3) return match;
+          
+          const L = parsePart(parts[0], 1);
+          const C = parsePart(parts[1], 1);
+          const H = parsePart(parts[2], 360);
+          const A = parts[3] ? parsePart(parts[3], 1) : 1;
+          
+          const [r, g, b] = oklchToRgb(L, C, H);
+          return `rgba(${r}, ${g}, ${b}, ${A})`;
+        } catch (e) {
+          return 'rgba(128, 128, 128, 1)';
         }
-
-        ctx.font = 'bold 13px sans-serif';
-        ctx.fillText(item, 45, itemY);
-
-        // indicator bullet
-        ctx.fillStyle = isActive ? '#328CC1' : '#475569';
-        ctx.beginPath();
-        ctx.arc(28, itemY - 4, 3, 0, Math.PI * 2);
-        ctx.fill();
       });
 
-      // Top Header bar simulation
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(260, 0, 940, 70);
-      ctx.strokeStyle = '#E2E8F0';
-      ctx.beginPath();
-      ctx.moveTo(260, 70);
-      ctx.lineTo(1200, 70);
-      ctx.stroke();
-
-      // Header Titles (OdiCEE Partenaires + version)
-      ctx.fillStyle = '#0F172A';
-      ctx.font = 'bold 16px sans-serif';
-      ctx.fillText('OdiCEE Partenaires', 290, 36);
-      ctx.fillStyle = '#94A3B8';
-      ctx.font = 'bold 11px monospace';
-      ctx.fillText('v27.01', 290, 52);
-
-      // User avatar profile bubble in right side of header
-      ctx.fillStyle = '#F1F5F9';
-      ctx.beginPath();
-      if (ctx.roundRect) {
-        ctx.roundRect(980, 16, 190, 38, 19);
-      } else {
-        ctx.rect(980, 16, 190, 38);
-      }
-      ctx.fill();
-
-      ctx.fillStyle = '#0F172A';
-      ctx.font = 'bold 11px sans-serif';
-      ctx.fillText(companyName.length > 20 ? companyName.substring(0, 18) + '...' : companyName, 995, 38);
-
-      // Main Content panel rendering title
-      ctx.fillStyle = '#0F172A';
-      ctx.font = 'bold 22px sans-serif';
-      ctx.fillText(activeViewLabel, 290, 125);
-
-      ctx.fillStyle = '#64748B';
-      ctx.font = 'bold 12px sans-serif';
-      ctx.fillText('Aperçu instantané d\'audit technique', 290, 148);
-
-      // Active view bodies schematic layout rendering
-      if (currentView === 'dashboard') {
-        // Draw 3 statistics card boxes
-        for (let i = 0; i < 3; i++) {
-          const cardX = 290 + i * 290;
-          ctx.fillStyle = '#FFFFFF';
-          ctx.beginPath();
-          if (ctx.roundRect) {
-            ctx.roundRect(cardX, 180, 270, 130, 16);
-          } else {
-            ctx.rect(cardX, 180, 270, 130);
-          }
-          ctx.fill();
-          ctx.strokeStyle = '#E2E8F0';
-          ctx.stroke();
-
-          // Card Headers labels
-          ctx.fillStyle = '#64748B';
-          ctx.font = 'bold 11px sans-serif';
-          const labels = ['DOSSIERS EN COURS', 'PRIME GENEREE', 'TAUX DE VALIDATION'];
-          ctx.fillText(labels[i], cardX + 20, 215);
-
-          // Card Values figures
-          ctx.fillStyle = '#0F172A';
-          ctx.font = 'bold 26px sans-serif';
-          const values = [String(dossiers.length), '184 250 €', '94.2%'];
-          ctx.fillText(values[i], cardX + 20, 255);
-
-          // Subtext percentage highlights
-          ctx.fillStyle = '#10B981';
-          ctx.font = 'bold 10px sans-serif';
-          ctx.fillText('● Performance optimale', cardX + 20, 288);
-        }
-
-        // Folders list block mockup
-        ctx.fillStyle = '#FFFFFF';
-        ctx.beginPath();
-        if (ctx.roundRect) {
-          ctx.roundRect(290, 340, 880, 370, 16);
-        } else {
-          ctx.rect(290, 340, 880, 370);
-        }
-        ctx.fill();
-        ctx.strokeStyle = '#E2E8F0';
-        ctx.stroke();
-
-        ctx.fillStyle = '#0F172A';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.fillText('Suivi des dossiers CEE actifs', 315, 380);
-
-        // Draw individual item rows representing dossiers list
-        dossiers.slice(0, 5).forEach((d, idx) => {
-          const rowY = 425 + idx * 52;
-          ctx.fillStyle = '#64748B';
-          ctx.font = 'bold 11px sans-serif';
-          ctx.fillText(d.reference, 315, rowY);
-          ctx.fillText(d.beneficiaire.nom + ' ' + d.beneficiaire.prenom, 480, rowY);
-          ctx.fillText(d.dateCreation, 710, rowY);
+      // Replace oklab
+      result = result.replace(/oklab\(([^)]+)\)/gi, (match, content) => {
+        try {
+          const parts = content.trim().split(/[\s,/]+/).filter(Boolean);
+          if (parts.length < 3) return match;
           
-          // Badge background
-          ctx.fillStyle = d.status === 'Complet' ? '#DEF7EC' : '#FEF3C7';
-          ctx.beginPath();
-          if (ctx.roundRect) {
-            ctx.roundRect(910, rowY - 14, 100, 20, 10);
-          } else {
-            ctx.rect(910, rowY - 14, 100, 20);
-          }
-          ctx.fill();
-          ctx.fillStyle = d.status === 'Complet' ? '#03543F' : '#92400E';
-          ctx.font = 'bold 10px sans-serif';
-          ctx.fillText(d.status, 930, rowY);
-        });
-      } else if (currentView === 'company') {
-        // Form Layout mockup
-        ctx.fillStyle = '#FFFFFF';
-        ctx.beginPath();
-        if (ctx.roundRect) {
-          ctx.roundRect(290, 185, 880, 520, 16);
-        } else {
-          ctx.rect(290, 185, 880, 520);
+          const L = parsePart(parts[0], 1);
+          const a = parsePart(parts[1], 1);
+          const b = parsePart(parts[2], 1);
+          const A = parts[3] ? parsePart(parts[3], 1) : 1;
+          
+          const [r, g, bRes] = oklabToRgb(L, a, b);
+          return `rgba(${r}, ${g}, ${bRes}, ${A})`;
+        } catch (e) {
+          return 'rgba(128, 128, 128, 1)';
         }
-        ctx.fill();
-        ctx.strokeStyle = '#E2E8F0';
-        ctx.stroke();
+      });
 
-        ctx.fillStyle = '#0F172A';
-        ctx.font = 'bold 15px sans-serif';
-        ctx.fillText('Informations Administratives Légales : ' + companyName, 320, 225);
+      return result;
+    };
 
-        // Simulate form fields outlines
-        const fields = [
-          { label: 'Raison Sociale', value: companyName },
-          { label: 'SIRET', value: userCompany?.siret || '49201930100023' },
-          { label: 'Adresse', value: userCompany?.adresse || '12 RUE DE LA PAIX' },
-          { label: 'Ville', value: userCompany?.ville || 'Paris' }
-        ];
+    // Arrays to store originals for restoration
+    const stylesToRestore: { element: HTMLStyleElement; originalText: string }[] = [];
+    const inlineStylesToRestore: { element: HTMLElement; originalStyle: string }[] = [];
 
-        fields.forEach((field, idx) => {
-          const fieldY = 275 + idx * 82;
-          ctx.fillStyle = '#64748B';
-          ctx.font = 'bold 11px sans-serif';
-          ctx.fillText(field.label, 320, fieldY);
+    try {
+      triggerToast("Génération du rapport d'assistance en cours...");
 
-          ctx.fillStyle = '#F8FAFC';
-          ctx.beginPath();
-          if (ctx.roundRect) {
-            ctx.roundRect(320, fieldY + 8, 410, 36, 8);
-          } else {
-            ctx.rect(320, fieldY + 8, 410, 36);
-          }
-          ctx.fill();
-          ctx.strokeStyle = '#CBD5E1';
-          ctx.stroke();
-
-          ctx.fillStyle = '#0F172A';
-          ctx.font = 'bold 12px sans-serif';
-          ctx.fillText(field.value, 335, fieldY + 30);
-        });
-
-        // Right hand side info box
-        ctx.fillStyle = '#F0F9FF';
-        ctx.beginPath();
-        if (ctx.roundRect) {
-          ctx.roundRect(770, 260, 370, 380, 16);
-        } else {
-          ctx.rect(770, 260, 370, 380);
-        }
-        ctx.fill();
-        ctx.strokeStyle = '#B9E6FE';
-        ctx.stroke();
-
-        ctx.fillStyle = '#0369A1';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.fillText('Documents et Attestations', 800, 305);
-        ctx.fillStyle = '#0F172A';
-        ctx.font = 'bold 11px sans-serif';
-        ctx.fillText('Attestation URSSAF - Vigilance légale', 800, 340);
-        ctx.fillStyle = '#059669';
-        ctx.font = 'bold 10px sans-serif';
-        ctx.fillText('✔ CONFORME ET ENREGISTRÉ', 800, 365);
-      } else {
-        // Generic active view visual representation
-        ctx.fillStyle = '#FFFFFF';
-        ctx.beginPath();
-        if (ctx.roundRect) {
-          ctx.roundRect(290, 180, 880, 500, 20);
-        } else {
-          ctx.rect(290, 180, 880, 500);
-        }
-        ctx.fill();
-        ctx.strokeStyle = '#E2E8F0';
-        ctx.stroke();
-
-        ctx.fillStyle = '#0F172A';
-        ctx.font = 'bold 16px sans-serif';
-        ctx.fillText('Module de Traitement : ' + activeViewLabel, 330, 230);
-
-        // Drawing simple line skeletons
-        ctx.strokeStyle = '#F1F5F9';
-        ctx.lineWidth = 14;
-        for (let i = 0; i < 7; i++) {
-          ctx.beginPath();
-          ctx.moveTo(330, 290 + i * 44);
-          ctx.lineTo(1130, 290 + i * 44);
-          ctx.stroke();
+      // 1. Process all <style> tags to replace oklch/oklab values with RGBA before capturing
+      const styleElements = Array.from(document.querySelectorAll('style'));
+      for (const styleEl of styleElements) {
+        const text = styleEl.textContent || '';
+        if (text.toLowerCase().includes('oklch') || text.toLowerCase().includes('oklab')) {
+          stylesToRestore.push({ element: styleEl, originalText: text });
+          styleEl.textContent = parseAndReplaceColors(text);
         }
       }
 
-      // --- INTEGRATED METADATA & DIAGNOSTICS FOR JPG REPORT ---
-      // Draw horizontal separator at y=760
-      ctx.strokeStyle = '#CBD5E1';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(0, 760);
-      ctx.lineTo(1200, 760);
-      ctx.stroke();
+      // 2. Process all elements with inline style attributes
+      const styledElements = Array.from(document.querySelectorAll('[style]')) as HTMLElement[];
+      for (const el of styledElements) {
+        const styleAttr = el.getAttribute('style') || '';
+        if (styleAttr.toLowerCase().includes('oklch') || styleAttr.toLowerCase().includes('oklab')) {
+          inlineStylesToRestore.push({ element: el, originalStyle: styleAttr });
+          el.setAttribute('style', parseAndReplaceColors(styleAttr));
+        }
+      }
 
-      // Top banner of technical report at y=780
-      ctx.fillStyle = '#0F172A';
-      ctx.fillRect(20, 780, 1160, 50);
+      // 3. Capture the live screen using html2canvas with transformed styles
+      const screenshotCanvas = await html2canvas(document.body, {
+        useCORS: true,
+        allowTaint: true,
+        scale: 1.5, // Crisp resolution balance
+        backgroundColor: '#F1F3F5',
+        logging: false
+      });
 
-      ctx.fillStyle = '#FFFFFF';
-      ctx.font = 'bold 15px sans-serif';
-      ctx.fillText("RAPPORT D'ASSISTANCE TECHNIQUE - DIAGNOSTIC SYSTEME", 40, 812);
+      // 4. Gather diagnostics parameters
+      const reportUrl = window.location.href;
+      const reportUA = navigator.userAgent;
+      const reportPlatform = (navigator as any).userAgentData?.platform || navigator.platform || "Inconnu";
+      const reportScreenSize = `${window.screen.width}x${window.screen.height} (DPR: ${window.devicePixelRatio || 1})`;
+      const reportViewport = `${window.innerWidth}x${window.innerHeight}`;
+      const reportDate = new Date().toLocaleString('fr-FR', { dateStyle: 'long', timeStyle: 'medium' });
+      const activeViewLabel = 
+        currentView === 'dashboard' ? 'Tableau de bord' :
+        currentView === 'wizard' ? 'Nouveau dossier CEE (Wizard)' :
+        currentView === 'simulator' ? 'Simulateur de primes' :
+        currentView === 'company' ? 'Ma société' :
+        currentView === 'documentation' ? 'Boîtes à outils' :
+        currentView === 'detail' ? 'Détail de dossier' : 'Accueil';
+      const companyName = userCompany?.raisonSociale || 'Ouate Else';
 
-      ctx.fillStyle = '#38BDF8';
-      ctx.font = 'bold 11px monospace';
-      ctx.fillText("VERSION 27.01", 1070, 812);
+      // 3. Create a final taller canvas to append the diagnostics info
+      const finalCanvas = document.createElement('canvas');
+      finalCanvas.width = screenshotCanvas.width;
+      
+      const extraHeight = Math.round(320 * (screenshotCanvas.width / 1200)); // proportional extra height
+      finalCanvas.height = screenshotCanvas.height + extraHeight;
 
-      // Main content block for diagnostics parameters
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(20, 830, 1160, 240);
-      ctx.strokeStyle = '#E2E8F0';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(20, 780, 1160, 290);
+      const ctx = finalCanvas.getContext('2d');
+      if (ctx) {
+        // Draw the real screenshot first
+        ctx.drawImage(screenshotCanvas, 0, 0);
 
-      // Grid of parameters
-      ctx.fillStyle = '#475569';
-      ctx.font = 'bold 12px sans-serif';
+        // Draw the diagnostic panel background in the appended space
+        const startY = screenshotCanvas.height;
+        ctx.fillStyle = '#F8FAFC';
+        ctx.fillRect(0, startY, finalCanvas.width, extraHeight);
 
-      // Column 1
-      ctx.fillText("Date de génération :", 50, 870);
-      ctx.fillStyle = '#0F172A';
-      ctx.font = 'bold 12px monospace';
-      ctx.fillText(reportDate, 220, 870);
+        // Scale factor for drawing text proportionally
+        const scale = finalCanvas.width / 1200;
 
-      ctx.fillStyle = '#475569';
-      ctx.font = 'bold 12px sans-serif';
-      ctx.fillText("URL Active :", 50, 910);
-      ctx.fillStyle = '#0F172A';
-      ctx.font = 'bold 12px monospace';
-      ctx.fillText(reportUrl.substring(0, 100), 220, 910);
+        // Draw separator
+        ctx.strokeStyle = '#CBD5E1';
+        ctx.lineWidth = 2 * scale;
+        ctx.beginPath();
+        ctx.moveTo(0, startY);
+        ctx.lineTo(finalCanvas.width, startY);
+        ctx.stroke();
 
-      ctx.fillStyle = '#475569';
-      ctx.font = 'bold 12px sans-serif';
-      ctx.fillText("Entreprise :", 50, 950);
-      ctx.fillStyle = '#0F172A';
-      ctx.font = 'bold 12px monospace';
-      ctx.fillText(companyName, 220, 950);
+        // Draw header of technical report
+        ctx.fillStyle = '#0F172A';
+        ctx.fillRect(20 * scale, startY + 20 * scale, finalCanvas.width - 40 * scale, 50 * scale);
 
-      ctx.fillStyle = '#475569';
-      ctx.font = 'bold 12px sans-serif';
-      ctx.fillText("Vue active :", 50, 990);
-      ctx.fillStyle = '#0F172A';
-      ctx.font = 'bold 12px monospace';
-      ctx.fillText(activeViewLabel, 220, 990);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = `bold ${Math.round(15 * scale)}px sans-serif`;
+        ctx.fillText("RAPPORT D'ASSISTANCE TECHNIQUE - DIAGNOSTIC SYSTEME (SCREENSHOT REEL)", 40 * scale, startY + 50 * scale);
 
-      // Column 2
-      ctx.fillStyle = '#475569';
-      ctx.font = 'bold 12px sans-serif';
-      ctx.fillText("Navigateur :", 620, 870);
-      ctx.fillStyle = '#0F172A';
-      ctx.font = 'bold 11px monospace';
-      const uaPart1 = reportUA.substring(0, 60);
-      const uaPart2 = reportUA.substring(60, 120);
-      ctx.fillText(uaPart1, 790, 870);
-      if (uaPart2) ctx.fillText(uaPart2, 790, 888);
+        ctx.fillStyle = '#38BDF8';
+        ctx.font = `bold ${Math.round(11 * scale)}px monospace`;
+        ctx.fillText("VERSION 27.01", finalCanvas.width - 150 * scale, startY + 50 * scale);
 
-      ctx.fillStyle = '#475569';
-      ctx.font = 'bold 12px sans-serif';
-      ctx.fillText("Système / Périphérique :", 620, 915);
-      ctx.fillStyle = '#0F172A';
-      ctx.font = 'bold 12px monospace';
-      ctx.fillText(reportPlatform, 790, 915);
+        // Main content block for diagnostics parameters
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(20 * scale, startY + 70 * scale, finalCanvas.width - 40 * scale, 230 * scale);
+        ctx.strokeStyle = '#E2E8F0';
+        ctx.lineWidth = 1 * scale;
+        ctx.strokeRect(20 * scale, startY + 70 * scale, finalCanvas.width - 40 * scale, 230 * scale);
 
-      ctx.fillStyle = '#475569';
-      ctx.font = 'bold 12px sans-serif';
-      ctx.fillText("Résolution physique :", 620, 955);
-      ctx.fillStyle = '#0F172A';
-      ctx.font = 'bold 12px monospace';
-      ctx.fillText(reportScreenSize, 790, 955);
+        // Grid of parameters
+        ctx.fillStyle = '#475569';
+        ctx.font = `bold ${Math.round(12 * scale)}px sans-serif`;
 
-      ctx.fillStyle = '#475569';
-      ctx.font = 'bold 12px sans-serif';
-      ctx.fillText("Dimensions Viewport :", 620, 995);
-      ctx.fillStyle = '#0F172A';
-      ctx.font = 'bold 12px monospace';
-      ctx.fillText(reportViewport, 790, 995);
+        // Column 1
+        ctx.fillText("Date de génération :", 50 * scale, startY + 110 * scale);
+        ctx.fillStyle = '#0F172A';
+        ctx.font = `bold ${Math.round(12 * scale)}px monospace`;
+        ctx.fillText(reportDate, 220 * scale, startY + 110 * scale);
 
-      // Warning instruction footer block
-      ctx.fillStyle = '#EFF6FF';
-      ctx.fillRect(40, 1025, 1120, 34);
-      ctx.strokeStyle = '#BFDBFE';
-      ctx.strokeRect(40, 1025, 1120, 34);
+        ctx.fillStyle = '#475569';
+        ctx.font = `bold ${Math.round(12 * scale)}px sans-serif`;
+        ctx.fillText("URL Active :", 50 * scale, startY + 145 * scale);
+        ctx.fillStyle = '#0F172A';
+        ctx.font = `bold ${Math.round(12 * scale)}px monospace`;
+        ctx.fillText(reportUrl.substring(0, 80), 220 * scale, startY + 145 * scale);
 
-      ctx.fillStyle = '#1E40AF';
-      ctx.font = 'bold 11px sans-serif';
-      ctx.fillText("📩 ACTION : Veuillez transmettre ce rapport JPG de diagnostic à votre chargé de clientèle.", 60, 1046);
+        ctx.fillStyle = '#475569';
+        ctx.font = `bold ${Math.round(12 * scale)}px sans-serif`;
+        ctx.fillText("Entreprise :", 50 * scale, startY + 180 * scale);
+        ctx.fillStyle = '#0F172A';
+        ctx.font = `bold ${Math.round(12 * scale)}px monospace`;
+        ctx.fillText(companyName, 220 * scale, startY + 180 * scale);
+
+        ctx.fillStyle = '#475569';
+        ctx.font = `bold ${Math.round(12 * scale)}px sans-serif`;
+        ctx.fillText("Vue active :", 50 * scale, startY + 215 * scale);
+        ctx.fillStyle = '#0F172A';
+        ctx.font = `bold ${Math.round(12 * scale)}px monospace`;
+        ctx.fillText(activeViewLabel, 220 * scale, startY + 215 * scale);
+
+        // Column 2
+        ctx.fillStyle = '#475569';
+        ctx.font = `bold ${Math.round(12 * scale)}px sans-serif`;
+        ctx.fillText("Navigateur :", 620 * scale, startY + 110 * scale);
+        ctx.fillStyle = '#0F172A';
+        ctx.font = `bold ${Math.round(11 * scale)}px monospace`;
+        const uaPart1 = reportUA.substring(0, 50);
+        const uaPart2 = reportUA.substring(50, 100);
+        ctx.fillText(uaPart1, 790 * scale, startY + 110 * scale);
+        if (uaPart2) ctx.fillText(uaPart2, 790 * scale, startY + 125 * scale);
+
+        ctx.fillStyle = '#475569';
+        ctx.font = `bold ${Math.round(12 * scale)}px sans-serif`;
+        ctx.fillText("Système / Périphérique :", 620 * scale, startY + 150 * scale);
+        ctx.fillStyle = '#0F172A';
+        ctx.font = `bold ${Math.round(12 * scale)}px monospace`;
+        ctx.fillText(reportPlatform, 790 * scale, startY + 150 * scale);
+
+        ctx.fillStyle = '#475569';
+        ctx.font = `bold ${Math.round(12 * scale)}px sans-serif`;
+        ctx.fillText("Résolution physique :", 620 * scale, startY + 185 * scale);
+        ctx.fillStyle = '#0F172A';
+        ctx.font = `bold ${Math.round(12 * scale)}px monospace`;
+        ctx.fillText(reportScreenSize, 790 * scale, startY + 185 * scale);
+
+        ctx.fillStyle = '#475569';
+        ctx.font = `bold ${Math.round(12 * scale)}px sans-serif`;
+        ctx.fillText("Dimensions Viewport :", 620 * scale, startY + 220 * scale);
+        ctx.fillStyle = '#0F172A';
+        ctx.font = `bold ${Math.round(12 * scale)}px monospace`;
+        ctx.fillText(reportViewport, 790 * scale, startY + 220 * scale);
+
+        // Warning instruction footer block
+        ctx.fillStyle = '#EFF6FF';
+        ctx.fillRect(40 * scale, startY + 250 * scale, finalCanvas.width - 80 * scale, 34 * scale);
+        ctx.strokeStyle = '#BFDBFE';
+        ctx.strokeRect(40 * scale, startY + 250 * scale, finalCanvas.width - 80 * scale, 34 * scale);
+
+        ctx.fillStyle = '#1E40AF';
+        ctx.font = `bold ${Math.round(11 * scale)}px sans-serif`;
+        ctx.fillText("📩 ACTION : Veuillez transmettre ce rapport JPG de diagnostic à votre chargé de clientèle.", 60 * scale, startY + 271 * scale);
+      }
+
+      // Convert the final combined canvas to jpeg
+      const reportDataUrl = finalCanvas.toDataURL('image/jpeg', 0.95);
+
+      // Download trigger
+      const link = document.createElement("a");
+      link.setAttribute("href", reportDataUrl);
+      link.setAttribute("download", `Rapport_Assistance_OdiCEE_${Date.now()}.jpg`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      triggerToast("Rapport d'assistance généré avec succès !");
+    } catch (err) {
+      console.error(err);
+      triggerToast("Erreur lors de la capture d'écran");
+    } finally {
+      // Restore all styled elements and <style> tags to their exact original text
+      for (const item of stylesToRestore) {
+        try {
+          item.element.textContent = item.originalText;
+        } catch (e) {
+          // ignore
+        }
+      }
+      for (const item of inlineStylesToRestore) {
+        try {
+          item.element.setAttribute('style', item.originalStyle);
+        } catch (e) {
+          // ignore
+        }
+      }
     }
-
-    const reportDataUrl = canvas.toDataURL('image/jpeg', 0.95);
-
-    // 3. Download JPG trigger
-    const link = document.createElement("a");
-    link.setAttribute("href", reportDataUrl);
-    link.setAttribute("download", `Rapport_Assistance_OdiCEE_${Date.now()}.jpg`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    // 4. Trigger snackbar alert
-    triggerToast("Transmettez le rapport généré à votre chargé de clientèle");
   };
 
   const handleLoginSuccess = (email: string, companyInfo?: any) => {
@@ -1130,7 +1007,7 @@ export default function App() {
                   Odi<span className="text-secondary">CEE</span> Partenaires
                 </span>
                 <span className="text-[10px] text-slate-400 font-bold font-mono mt-0.5 leading-none">
-                  27.01
+                  version 27.01 by Adeena 
                 </span>
               </div>
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Calculator, Save, RefreshCw, Send, ArrowRight, Sparkles, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Calculator, Save, RefreshCw, Send, ArrowRight, Sparkles, AlertCircle, Calendar } from 'lucide-react';
 import { CEE_SHEETS_LIST, CEE_SHEETS_MAP } from '../lib/ceeData';
 import { ChantierItem } from '../types';
 
@@ -23,9 +23,28 @@ export default function Simulator({
   const [clientPrenom, setClientPrenom] = useState('');
   const [draftSavedMessage, setDraftSavedMessage] = useState(false);
 
+  // Date d'édition du devis
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [dateDevis, setDateDevis] = useState<string>(todayStr);
+
+  const formatDateFR = (dateStr: string) => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return dateStr;
+  };
+
+  // Bonification state
+  const [bonificationType, setBonificationType] = useState<'aucun' | 'coup_de_pouce' | 'zni' | 'cpe'>('aucun');
+  const [cpeDuree, setCpeDuree] = useState<'10_ans_ou_moins' | 'plus_de_10_ans'>('10_ans_ou_moins');
+  const [cpeEconomiePct, setCpeEconomiePct] = useState<number>(20);
+
   // Property editors state per chantier item
-  const handleAddSheet = () => {
-    const sheet = CEE_SHEETS_MAP[selectedSheetCode];
+  const handleAddSheet = (codeToAdd?: string | React.MouseEvent) => {
+    const code = typeof codeToAdd === 'string' ? codeToAdd : selectedSheetCode;
+    const sheet = CEE_SHEETS_MAP[code];
     if (!sheet) return;
 
     // Build default properties
@@ -50,7 +69,7 @@ export default function Simulator({
       referenceProduit: ''
     };
 
-    setSimulationChantiers([...simulationChantiers, newChantier]);
+    setSimulationChantiers(prev => [...prev, newChantier]);
   };
 
   const handleRemoveChantier = (id: string) => {
@@ -87,10 +106,36 @@ export default function Simulator({
     setClientNom('');
     setClientPrenom('');
     setDraftSavedMessage(false);
+    setDateDevis(todayStr);
+    setBonificationType('aucun');
+    setCpeDuree('10_ans_ou_moins');
+    setCpeEconomiePct(20);
   };
 
   // Calculations
-  const totalCumac = simulationChantiers.reduce((acc, c) => acc + c.volumeCumac, 0);
+  const baseCumac = simulationChantiers.reduce((acc, c) => acc + c.volumeCumac, 0);
+
+  let bonificationMultiplier = 1;
+  let bonificationLabel = 'Aucune';
+
+  if (bonificationType === 'coup_de_pouce') {
+    bonificationMultiplier = 2;
+    bonificationLabel = 'Coup de pouce (x2)';
+  } else if (bonificationType === 'zni') {
+    bonificationMultiplier = 2;
+    bonificationLabel = 'ZNI (x2)';
+  } else if (bonificationType === 'cpe') {
+    const pct = Math.max(0, cpeEconomiePct || 0);
+    if (cpeDuree === 'plus_de_10_ans') {
+      bonificationMultiplier = 1 + (2 * (pct / 100));
+      bonificationLabel = `CPE (>10 ans, ${pct}% éco) : x${bonificationMultiplier.toFixed(2)}`;
+    } else {
+      bonificationMultiplier = 1 + (pct / 100);
+      bonificationLabel = `CPE (≤10 ans, ${pct}% éco) : x${bonificationMultiplier.toFixed(2)}`;
+    }
+  }
+
+  const totalCumac = baseCumac * bonificationMultiplier;
   const totalPrime = totalCumac * 6;
 
   const handleDraftSaveClick = () => {
@@ -144,7 +189,23 @@ export default function Simulator({
         {/* Left/Middle side: Sheets configuration */}
         <div className="lg:col-span-2 space-y-6">
           {/* Operations catalog adder card */}
-          <div className="bg-white rounded-3xl p-6 border border-black/10 shadow-xs">
+          <div className="bg-white rounded-3xl p-6 border border-black/10 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-secondary" />
+                <label htmlFor="dateDevis" className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Date d'édition du devis
+                </label>
+              </div>
+              <input
+                id="dateDevis"
+                type="date"
+                value={dateDevis}
+                onChange={(e) => setDateDevis(e.target.value)}
+                className="rounded-xl border border-black/10 px-3.5 py-2 text-xs font-bold text-slate-800 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-secondary/50 cursor-pointer"
+              />
+            </div>
+
             <h3 className="font-black text-primary text-sm uppercase tracking-wider mb-4 flex items-center gap-2">
               <Plus className="w-5 h-5 text-secondary" /> Ajouter une opération standardisée
             </h3>
@@ -173,6 +234,172 @@ export default function Simulator({
             <p className="text-[10px] text-slate-400 mt-3 font-bold uppercase tracking-wide">
               Formule réglementaire de calcul : Volume MWh Cumac × 6 € par MWh valorisé.
             </p>
+
+            {isLoggedIn && (
+              <div className="mt-5 pt-4 border-t border-slate-100">
+                <div className="flex items-center justify-between mb-2.5">
+                  <span className="text-[10px] font-black text-secondary uppercase tracking-widest block">
+                    Ajout rapide — Vos 3 chantiers les plus fréquents
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  {[
+                    { code: 'BAR-EN-101', name: 'Combles / Toitures' },
+                    { code: 'BAR-EN-102', name: 'Isolation Murs' },
+                    { code: 'BAR-TH-104', name: 'Pompe à Chaleur' }
+                  ].map((frequent) => {
+                    const sheet = CEE_SHEETS_MAP[frequent.code];
+                    if (!sheet) return null;
+                    return (
+                      <button
+                        key={frequent.code}
+                        type="button"
+                        onClick={() => handleAddSheet(frequent.code)}
+                        className="flex items-center justify-between p-3 rounded-2xl border border-black/10 bg-slate-50/90 hover:bg-white hover:border-secondary hover:shadow-xs transition-all text-left cursor-pointer group"
+                      >
+                        <div className="min-w-0 flex-1 pr-2">
+                          <span className="text-[9px] font-mono font-bold text-slate-400 group-hover:text-secondary block">
+                            {frequent.code}
+                          </span>
+                          <p className="text-xs font-black text-slate-800 truncate mt-0.5">
+                            {frequent.name}
+                          </p>
+                        </div>
+                        <div className="w-6 h-6 rounded-lg bg-white border border-slate-200 group-hover:border-secondary group-hover:bg-secondary flex items-center justify-center shrink-0 transition-colors">
+                          <Plus className="w-3.5 h-3.5 text-slate-600 group-hover:text-white" />
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Bonifications CEE Card */}
+          <div className="bg-white rounded-3xl p-6 border border-black/10 shadow-xs space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-[10px] text-secondary font-bold uppercase tracking-widest block mb-0.5">
+                  Valorisation renforcée
+                </span>
+                <h3 className="font-black text-primary text-sm uppercase tracking-wider flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-secondary" /> Bonification CEE
+                </h3>
+              </div>
+              <span className="text-[9px] bg-slate-100 text-slate-600 font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">
+                Non cumulables
+              </span>
+            </div>
+
+            <p className="text-xs text-slate-500">
+              Activez une bonification applicable à votre projet pour majorer le volume de CEE valorisé.
+            </p>
+
+            {/* Bonification Selector Buttons */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              {[
+                { id: 'aucun', label: 'Aucune', desc: 'Standard' },
+                { id: 'coup_de_pouce', label: 'Coup de pouce', desc: 'Bonification x2' },
+                { id: 'zni', label: 'ZNI', desc: 'Outre-mer / Corse' },
+                { id: 'cpe', label: 'CPE', desc: 'Perf. Énergétique' }
+              ].map((bonif) => {
+                const isSelected = bonificationType === bonif.id;
+                return (
+                  <button
+                    key={bonif.id}
+                    type="button"
+                    onClick={() => setBonificationType(bonif.id as any)}
+                    className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                      isSelected
+                        ? 'bg-primary text-white border-primary shadow-xs'
+                        : 'bg-slate-50 hover:bg-slate-100 border-black/10 text-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black">{bonif.label}</span>
+                      <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${
+                        isSelected ? 'border-white bg-white/20' : 'border-slate-300 bg-white'
+                      }`}>
+                        {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-white block"></span>}
+                      </div>
+                    </div>
+                    <span className={`text-[10px] font-medium mt-1.5 ${isSelected ? 'text-slate-300' : 'text-slate-400'}`}>
+                      {bonif.desc}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* CPE conditional fields */}
+            {bonificationType === 'cpe' && (
+              <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-4 animate-fade-in">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black uppercase tracking-wider text-primary">
+                    Paramètres du Contrat de Performance Énergétique (CPE)
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Duration of contract */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-slate-700">
+                      Durée du contrat *
+                    </label>
+                    <div className="flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setCpeDuree('10_ans_ou_moins')}
+                        className={`px-3 py-2.5 rounded-xl border text-xs font-bold transition-all text-left flex items-center justify-between cursor-pointer ${
+                          cpeDuree === '10_ans_ou_moins'
+                            ? 'bg-secondary/10 border-secondary text-primary font-black shadow-xs'
+                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        <span>10 ans ou moins</span>
+                        <span className="text-[10px] text-slate-400 font-mono">Factor = 1 + %éco</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCpeDuree('plus_de_10_ans')}
+                        className={`px-3 py-2.5 rounded-xl border text-xs font-bold transition-all text-left flex items-center justify-between cursor-pointer ${
+                          cpeDuree === 'plus_de_10_ans'
+                            ? 'bg-secondary/10 border-secondary text-primary font-black shadow-xs'
+                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        <span>Strictement plus de 10 ans</span>
+                        <span className="text-[10px] text-slate-400 font-mono">Factor = 1 + 2×%éco</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Percentage of energy savings */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-slate-700">
+                      Pourcentage d'économie d'énergie (%) *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="1"
+                        placeholder="Ex: 20"
+                        value={cpeEconomiePct}
+                        onChange={(e) => setCpeEconomiePct(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
+                        className="w-full rounded-xl border border-black/10 px-3.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-secondary/50 bg-white font-bold text-slate-800 pr-8"
+                      />
+                      <span className="absolute right-3 top-2.5 text-xs font-bold text-slate-400">%</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-medium leading-normal">
+                      Saisissez le pourcentage d'économie d'énergie garanti contractuellement.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* List of active simulation operations */}
@@ -306,8 +533,18 @@ export default function Simulator({
                 <span>{simulationChantiers.length}</span>
               </div>
               <div className="flex justify-between items-center py-2 border-b border-white/10 text-xs font-bold uppercase tracking-wide">
-                <span className="text-slate-300">Volume global</span>
-                <span className="font-mono">{totalCumac.toFixed(2)} MWh</span>
+                <span className="text-slate-300">Volume de base</span>
+                <span className="font-mono">{baseCumac.toFixed(2)} MWh</span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-white/10 text-xs font-bold uppercase tracking-wide">
+                <span className="text-slate-300">Bonification</span>
+                <span className={`font-mono text-xs ${bonificationType !== 'aucun' ? 'text-secondary font-black' : 'text-slate-300'}`}>
+                  {bonificationLabel}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-white/10 text-xs font-bold uppercase tracking-wide">
+                <span className="text-slate-300">Volume bonifié</span>
+                <span className="font-mono text-secondary font-black">{totalCumac.toFixed(2)} MWh</span>
               </div>
               <div className="py-4">
                 <p className="text-[10px] text-slate-300 font-bold uppercase tracking-wider">Aide financière valorisée</p>
@@ -315,7 +552,9 @@ export default function Simulator({
                   {totalPrime.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
                 </div>
                 <p className="text-[10px] text-slate-400 mt-2 font-medium">
-                  Basé sur un coefficient de valorisation fixe de 6 € / MWh cumac.
+                  {isLoggedIn
+                    ? `Basé sur les tarifs de votre contrat à la date du ${formatDateFR(dateDevis)}`
+                    : "Basé sur un coefficient de valorisation fixe de 6 € / MWh cumac."}
                 </p>
               </div>
 

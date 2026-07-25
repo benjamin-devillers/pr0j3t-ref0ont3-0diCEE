@@ -53,7 +53,7 @@ export default function FolderWizard({ initialChantiers, onWizardComplete, onCan
   // Étape 1: Bénéficiaire state
   const [beneficiary, setBeneficiary] = useState<Beneficiary>({
     type: 'personne_physique',
-    civility: 'M.',
+    civility: '',
     nom: '',
     prenom: '',
     adresse: '',
@@ -223,6 +223,7 @@ export default function FolderWizard({ initialChantiers, onWizardComplete, onCan
           setBeneficiary(prev => ({
             ...prev,
             type: extracted.beneficiaireRaisonSociale ? 'personne_morale' : 'personne_physique',
+            civility: extracted.beneficiaireCivilite || '',
             nom: extracted.beneficiaireNom || '',
             prenom: extracted.beneficiairePrenom || '',
             raisonSociale: extracted.beneficiaireRaisonSociale || '',
@@ -323,7 +324,7 @@ export default function FolderWizard({ initialChantiers, onWizardComplete, onCan
     setIsNewClientMode(true);
     setBeneficiary({
       type: 'personne_physique',
-      civility: 'M.',
+      civility: '',
       nom: '',
       prenom: '',
       adresse: '',
@@ -839,7 +840,7 @@ export default function FolderWizard({ initialChantiers, onWizardComplete, onCan
                     <FileText className="w-6 h-6" />
                   </div>
                   <div>
-                    <h4 className="font-black text-primary group-hover:text-secondary text-sm">Déclaration à blanc (Saisie manuelle)</h4>
+                    <h4 className="font-black text-primary group-hover:text-secondary text-sm">Saisie manuelle</h4>
                     <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
                       Remplissez manuellement les formulaires de l'espace partenaire étape par étape sans charger de fichier initial.
                     </p>
@@ -850,7 +851,7 @@ export default function FolderWizard({ initialChantiers, onWizardComplete, onCan
                   onClick={() => { setUseDevisAnalyse(false); setCurrentStep(1); }}
                   className="w-full bg-primary hover:bg-slate-800 text-white font-bold py-3 px-4 rounded-xl text-xs uppercase tracking-wider cursor-pointer transition-all mt-4"
                 >
-                  Saisie à blanc <ArrowRight className="w-3.5 h-3.5 inline ml-1.5" />
+                  Saisie manuelle<ArrowRight className="w-3.5 h-3.5 inline ml-1.5" />
                 </button>
               </div>
             </div>
@@ -1026,6 +1027,7 @@ export default function FolderWizard({ initialChantiers, onWizardComplete, onCan
                       onChange={(e) => setBeneficiary({ ...beneficiary, civility: e.target.value })}
                       className="w-full rounded-lg border border-slate-200 px-3.5 py-2 text-xs focus:ring-2 focus:ring-primary focus:outline-none bg-slate-50/50"
                     >
+                      <option value="">-- Choisir --</option>
                       <option value="M.">M.</option>
                       <option value="Mme">Mme</option>
                       <option value="Autre">Autre</option>
@@ -1102,8 +1104,10 @@ export default function FolderWizard({ initialChantiers, onWizardComplete, onCan
                         onChange={(e) => setBeneficiary({ ...beneficiary, civility: e.target.value })}
                         className="w-full rounded-lg border border-slate-200 px-3.5 py-2 text-xs focus:ring-2 focus:ring-primary focus:outline-none bg-white"
                       >
+                        <option value="">-- Choisir --</option>
                         <option value="M.">M.</option>
                         <option value="Mme">Mme</option>
+                        <option value="Autre">Autre</option>
                       </select>
                     </div>
                     <div className="space-y-1.5">

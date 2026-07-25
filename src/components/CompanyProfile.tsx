@@ -46,6 +46,7 @@ interface CompanyUser {
   telFixe: string;
   telPortable: string;
   newsletter: boolean;
+  active?: boolean;
 }
 
 const PARTNERSHIP_AGREEMENTS = [
@@ -126,7 +127,8 @@ export default function CompanyProfile({ companyInfo, onUpdateCompany, onBack }:
       profil: 'Gestionnaire espace partenaire',
       telFixe: '01 45 67 89 10',
       telPortable: '06 12 34 56 78',
-      newsletter: true
+      newsletter: true,
+      active: true
     },
     {
       id: 'usr-2',
@@ -136,7 +138,8 @@ export default function CompanyProfile({ companyInfo, onUpdateCompany, onBack }:
       profil: 'Commercial',
       telFixe: '01 23 45 67 89',
       telPortable: '06 98 76 54 32',
-      newsletter: false
+      newsletter: false,
+      active: true
     },
     {
       id: 'usr-3',
@@ -146,7 +149,8 @@ export default function CompanyProfile({ companyInfo, onUpdateCompany, onBack }:
       profil: 'Administrateur espace partenaire',
       telFixe: '01 02 03 04 05',
       telPortable: '06 00 00 00 00',
-      newsletter: true
+      newsletter: true,
+      active: true
     }
   ]);
 
@@ -158,7 +162,8 @@ export default function CompanyProfile({ companyInfo, onUpdateCompany, onBack }:
     profil: 'Commercial',
     telFixe: '',
     telPortable: '',
-    newsletter: false
+    newsletter: false,
+    active: true
   });
 
   // Current date defined in system metadata
@@ -337,7 +342,8 @@ export default function CompanyProfile({ companyInfo, onUpdateCompany, onBack }:
       profil: u.profil,
       telFixe: u.telFixe,
       telPortable: u.telPortable,
-      newsletter: u.newsletter
+      newsletter: u.newsletter,
+      active: u.active !== false
     });
   };
 
@@ -350,7 +356,8 @@ export default function CompanyProfile({ companyInfo, onUpdateCompany, onBack }:
       profil: 'Commercial',
       telFixe: '',
       telPortable: '',
-      newsletter: false
+      newsletter: false,
+      active: true
     });
   };
 
@@ -367,6 +374,31 @@ export default function CompanyProfile({ companyInfo, onUpdateCompany, onBack }:
 
     if (editingUserId) {
       // Editing
+      const originalUser = users.find(u => u.id === editingUserId);
+      const isRep = originalUser && (
+        `${originalUser.prenom} ${originalUser.nom}`.trim().toLowerCase() === companyInfo.representantLegal.trim().toLowerCase()
+      );
+
+      if (isRep) {
+        // Check if any info was modified
+        const hasChanged = originalUser && (
+          originalUser.prenom !== userForm.prenom ||
+          originalUser.nom !== userForm.nom ||
+          originalUser.email !== userForm.email ||
+          originalUser.profil !== userForm.profil ||
+          originalUser.telFixe !== userForm.telFixe ||
+          originalUser.telPortable !== userForm.telPortable ||
+          originalUser.newsletter !== userForm.newsletter
+        );
+
+        if (hasChanged) {
+          window.confirm(
+            "Le représentant de la société a-t-il changé ?\n\n" +
+            "Si oui, nous vous invitons à créer un nouvel utilisateur pour ce représentant, puis à créer une nouvelle version des informations administratives de la société."
+          );
+        }
+      }
+
       setUsers(prev => prev.map(u => u.id === editingUserId ? { ...u, ...userForm } : u));
       setEditingUserId(null);
     } else {
@@ -386,8 +418,23 @@ export default function CompanyProfile({ companyInfo, onUpdateCompany, onBack }:
       profil: 'Commercial',
       telFixe: '',
       telPortable: '',
-      newsletter: false
+      newsletter: false,
+      active: true
     });
+  };
+
+  const toggleUserActive = (userId: string) => {
+    setUsers(prev => prev.map(u => {
+      if (u.id === userId) {
+        const isRep = `${u.prenom} ${u.nom}`.trim().toLowerCase() === companyInfo.representantLegal.trim().toLowerCase();
+        if (isRep) {
+          alert("Le représentant de la société ne peut pas être désactivé.");
+          return u;
+        }
+        return { ...u, active: u.active === false ? true : false };
+      }
+      return u;
+    }));
   };
 
   const activeAgreement = PARTNERSHIP_AGREEMENTS.find(a => a.id === selectedAgreement);
@@ -406,17 +453,11 @@ export default function CompanyProfile({ companyInfo, onUpdateCompany, onBack }:
             <X className="w-4 h-4" />
           </button>
           <div>
-            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block">Ma boîte à outils</span>
+            <span className="text-[10px] text-secondary font-bold uppercase tracking-widest block">Ma société</span>
             <h1 className="font-sans text-xl md:text-2xl text-primary font-black tracking-tight leading-none mt-1">
-              Ma société
+              {editedCompany.raisonSociale}
             </h1>
           </div>
-        </div>
-
-        <div className="text-right hidden sm:block">
-          <span className="text-[10px] bg-primary/10 text-primary px-2.5 py-1 rounded-full font-black uppercase font-mono">
-            {editedCompany.raisonSociale}
-          </span>
         </div>
       </div>
 
@@ -752,6 +793,7 @@ export default function CompanyProfile({ companyInfo, onUpdateCompany, onBack }:
                       <th scope="col" className="px-4 py-3.5 text-left font-black">Utilisateur</th>
                       <th scope="col" className="px-4 py-3.5 text-left font-black">Login</th>
                       <th scope="col" className="px-4 py-3.5 text-left font-black">Rôle</th>
+                      <th scope="col" className="px-4 py-3.5 text-left font-black">Statut</th>
                       <th scope="col" className="px-4 py-3.5 text-center font-black">Actions</th>
                     </tr>
                   </thead>
@@ -778,8 +820,11 @@ export default function CompanyProfile({ companyInfo, onUpdateCompany, onBack }:
                       // Login display - just show email as lowercase or its prefix
                       const loginDisplay = user.email ? user.email.split('@')[0].toLowerCase() : '';
 
+                      // Representative indicator
+                      const isRepresentative = `${user.prenom} ${user.nom}`.trim().toLowerCase() === companyInfo.representantLegal.trim().toLowerCase();
+
                       return (
-                        <tr key={user.id} className="hover:bg-slate-50/40 transition-colors">
+                        <tr key={user.id} className={`hover:bg-slate-50/40 transition-colors ${user.active === false ? 'opacity-65' : ''}`}>
                           <td className="px-4 py-4 whitespace-nowrap">
                             <div className="flex items-center gap-3">
                               {/* Avatar circle */}
@@ -787,8 +832,13 @@ export default function CompanyProfile({ companyInfo, onUpdateCompany, onBack }:
                                 {initials}
                               </div>
                               <div>
-                                <span className="font-black text-slate-900 block text-sm">
+                                <span className="font-black text-slate-900 block text-sm flex items-center gap-1.5 flex-wrap">
                                   {user.prenom} {user.nom}
+                                  {isRepresentative && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200" title="Représentant de la société">
+                                      <UserCheck className="w-3 h-3 text-emerald-600 shrink-0" /> Représentant
+                                    </span>
+                                  )}
                                 </span>
                               </div>
                             </div>
@@ -801,15 +851,53 @@ export default function CompanyProfile({ companyInfo, onUpdateCompany, onBack }:
                               {roleLabel}
                             </span>
                           </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-center">
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            {user.active !== false ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                Actif
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                                Désactivé
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-center space-x-1.5">
                             <button
                               type="button"
                               onClick={() => handleEditUser(user)}
-                              className="w-10 h-10 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-800 flex items-center justify-center transition-all cursor-pointer inline-flex shadow-xs"
+                              className="w-10 h-10 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-800 flex items-center justify-center transition-all cursor-pointer inline-flex shadow-xs animate-none"
                               title="Modifier cet utilisateur"
                               id={`btn-edit-user-inline-${user.id}`}
                             >
                               <Edit className="w-4 h-4 text-slate-800" />
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={isRepresentative}
+                              onClick={() => toggleUserActive(user.id)}
+                              className={`w-10 h-10 rounded-xl border flex items-center justify-center transition-all inline-flex shadow-xs ${
+                                isRepresentative
+                                  ? 'border-slate-100 bg-slate-50 text-slate-300 cursor-not-allowed opacity-40'
+                                  : user.active === false
+                                  ? 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 cursor-pointer'
+                                  : 'border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 cursor-pointer'
+                              }`}
+                              title={
+                                isRepresentative
+                                  ? "Le représentant ne peut pas être désactivé"
+                                  : user.active === false
+                                  ? "Activer cet utilisateur"
+                                  : "Désactiver cet utilisateur"
+                              }
+                              id={`btn-toggle-active-${user.id}`}
+                            >
+                              {user.active === false ? (
+                                <Check className="w-4 h-4" />
+                              ) : (
+                                <X className="w-4 h-4" />
+                              )}
                             </button>
                           </td>
                         </tr>
